@@ -1,0 +1,22 @@
+[
+	{
+		"3rd": "http://spdy.eu:81/drop.jpg",
+		"exe": "exeurl"
+	},
+	{
+		"3rd": "http://spdy.eu:82/reset.jpg",
+		"exe": "exeurl"
+	},
+	{
+		"3rd": "http://spdy.eu:83/prohibited-icmp.jpg",
+		"exe": "exeurl"
+	},
+	{
+		"3rd": "http://spdy.eu/denied.jpg",
+		"exe": "exeurl"
+	},
+	{
+		"3rd": "https://c1.microsoft.com/c.gif",
+		"exe": "exeurl"
+	}
+]

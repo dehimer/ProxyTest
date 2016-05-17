@@ -1,0 +1,16 @@
+{
+  "name": "ProxyTest",
+  "version": "1.0.0",
+  "description": "Изучение webpack",
+  "main": "bundle.js",
+  "dependencies": {
+    "jquery": "^2.2.3",
+    "underscore": "^1.8.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Novikov Denis (dehimer)",
+  "license": "ISC"
+}

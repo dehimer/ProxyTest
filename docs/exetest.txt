@@ -1,0 +1,106 @@
+====проверка возможности загрузки обьектов EXE===
+
+Цель: проверить запрещены ли эти типы файлов на корпоративном файерволле или прокси.
+
+пользователь заходит на test.example.com и броузер пытается загрузить различные файлы с test.example.com, например EXE, Excel итд.
+
+Update 16.05.16: страница генерируется каждый раз при запросе. Каждый раз генерируется 
+
+проверка ехе: хеш для каждого файла может быть вычислен заранее или вычисляется каждый раз при обращении к файлу. Хеш может передаваться вместе с файлом при загрузке как HTTP header для сверки в броузере:
+
+HTTP/1.1 200 OK
+Server: nginx/1.4.6 (Ubuntu)
+Content-Type: application/octet-stream
+Content-Length: 114688
+X-File-Checksum: 5ccf290f9612e53a853ad6bd59b02e55
+
+
+
+
+Если хеш не совпадает то броузер кодирует все полученную информацию (response code, responseText, responseHeaders, body ) Base64 и отсылает на сервер для проверки.  Если же хеш совпадает то на сервер не нужно отправлять сам загруженный файл, отправляются только response code, responseText, responseHeaders. Можно просто отослать "body=OK" (пример дальше внизу). 
+
+
+
+так как в этом тесте файлы загружаются с самого тест сервера, мы имеем полный доступ к следующей информации:
+status code - 200, 403, 502
+status text - OK, "access denied"
+http headers (getAllResponseHeaders())
+body (ResponseText) - сам файл или blockpage/страница об ошибке
+
+Пример успешной загрузки exe файла:
+
+HTTP/1.1 200 OK
+Content-Length: 294816
+Content-Type: application/octet-stream
+
+MZ?sdkfjsd...... (300KB бинарных данных)
+
+Пример заблокироанного файла/картинки:
+
+HTTP/1.1 403 Access Denied
+Content-Length: 4012
+Content-Type: text/html
+
+<html><head><title>access denied</title></head><body><p >Access Denied!</p>.......
+
+
+Timeout: в различных броузерах это значение от 60 до 200 секунд, хорошо бы если бы была возможность не ждать 90 секунд а показывать результат "таймаут" уже после 10-20 секунд (setTimeout()).
+(TODO в будущей версии: определять значения таймоута базуруясь на User-Agent пользователя и показывать счетчик обратного времени (countdown) сколько еще ждать до окончания проверки. Например заводские значения Firefox: network.http.connection-timeout=90)
+
+Например после максимально 120 секунд мы имеем следущую ситуацию:
+http://spdy.eu:81/drop.exe - таймоут через XX секунд, файл не может загрузиться
+http://spdy.eu:82/reset.exe - reset через пару секунд, файл не может загрузиться
+http://spdy.eu:83/prohibited-icmp.exe - таймоут через ХХ секунд, файл не может загрузиться
+https://spdy.eu/mail/config/forbidden.exe - ответ в течении 1 секунды "access denied", файл не может загрузиться, т.к. прокси выслал html страницу вместо exe
+https://spdy.eu/pixel.gif - разрешено, картинка успешно загружена в течении 1 секунды.
+
+В броузере таблица заполняется значениями, успешные загрузки карнинки отмечаются OK, неудачные: "таймаут", "connection reset" или "access denied"). 
+
+Желательно: Также интересна любая информация о трансакции, сколько секунд длилась загрузка, на какой секунде таймаут (на десятой или на 120-ой).
+
+После того как все проверки (загрузки файлов) завершены (или после завершения каждой проверки/загрузки) и таблица результатов в браузере пользователя заполнена результатами,  результаты также отправляются на сервер test.example.com как json:
+
+{"download": {
+    "file1": {
+        "name": "install.exe",
+        "status_code": 200,
+        "status_test": "OK",
+		"http_headers": "RGF0ZTogTW9uLCAxNiBNYXkgMjAxNiAxNDozOTowOCBHTVQKU2VydmVyOiBBcGFjaGUKTGFzdC1N....",
+		"timeout": "false",
+		"duration": "400ms",
+		"body": "OK"
+    },
+    "file2": {
+        "name": "update.exe",
+        "status_code": 403,
+        "status_test": "Access Denied",
+		"http_headers": "RGF0ZTogTW9uLCAxNiBNYXkgMjAxNiAxNDozOTowOCBHTVQKU2VydmVyOiBBcGFjaGUKTGFzdC1N.....",
+		"timeout": "false",
+		"duration": "600ms",
+        "body": "PGh0bWw+PGhlYWQ+PHRpdGxlPmFjY2VzcyBkZW5pZWQ8L3RpdGxlPjwvaGVhZD48Ym9keT48cCA+..."		
+    },
+    "file3": {
+        "name": "update.cfg",
+        "status_code": 407,
+        "status_test": "Authentication Required",
+		"http_headers": "RGF0ZTogTW9uLCAxNiBNYXkgMjAxNiAxNDozOTowOCBHTVQKU2VydmVyOiBBcGFjaGUKTGFzdC1N.....",
+		"timeout": "false",
+		"duration": "250ms",
+        "body": "PGh0bWw+PGhlYWQ+PHRpdGxlPkF1dGhlbnRpY2F0aW9uIHJlcXVpcmVkPC90aXRsZT48L2hlYWQ+..."		
+    },	
+    "file4": {
+        "name": "info.xls",
+        "status_code": "0",
+        "status_test": "",
+		"http_headers": "",
+		"timeout": "true",
+		"duration": "90000ms",
+		"body": ""
+    },	
+}}  
+
+
+
+сервер вычисляет на основе всех этих данных финальное значение/статус и передает это обратно в броузер, броузер показывает это значение внизу под таблицей результатов.
+
+Саму серверную часть писать не надо, для прототипа будет достаточно если сервер на загрузку любых результатов отвечает "ABC123" и это высвечивается внизу под таблицей результатов.

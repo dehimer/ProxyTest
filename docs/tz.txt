@@ -1,0 +1,127 @@
+необходима вебстраница/webapp на которой пользователь может проверить необходимые условия для успешной выполнения нашей программы:
+
+1. успешная возможность загрузки инсталационной программы или обновления (Content-Type: application/executables, PE-File) с тест сервера (test.example.com) в броузер пользователя (который может находиться за прокси/файерволом).
+2. успешная возможность загрузки 3-party вебстраниц или картинок с 3-party domains (например www.microsoft.com, www.sap.com, www.yandex.ru) в броузере пользователя.
+
+Результаты тестов (в этом задании их только два, в будущем может быть сто) загружаются асинхронно по мере выполнения в броузере пользователя в виде таблицы: http://imgur.com/a/8Vks8
+
+
+все эти проверки должны быть возможны в основных современный броузерах (IE8-IE11, Edge, Chrome, Firefox) c применением только веб технологий (HTML/HTML5, JavaScript/AJAX/jQuery/итд) _без_ использования плагинов таких как Java/Silverlight/Flash/итд.
+
+Вышеперечисленные проверки это только начало, необходима возможность легко добавлять дальнейшие проверки (до 100).
+
+На данном этапе нужно создать только прототип который выполняет все затребованные функции.
+Регистрация/логин на странице НЕ нужна.
+Cookie, сессии НЕ нужны.
+MySQL итп backend НЕ нужны.
+красивый дизайн, темплайты, визуальные переходы, модные фичи и прочие "лампочки" НЕ нужны.
+
+
+
+Для проверки пользователь должен просто посетить страницу (например как это сделано на https://www.ssllabs.com/ssltest/viewMyClient.html). Регистрация/логин не требуется. Проверки проводятся асинхронно. Успешние проверки маркируются зеленым цветом (ОК или "+"), неуспешные (в том числе timeout) - красным цветом. 
+
+
+Пример как это должно выглядить (минимально/упрощенно): http://imgur.com/a/8Vks8
+
+возможный пример пошагово:
+
+пользователь заходит на страницу test.example.com и нажимает кнопку "старт тест"
+
+Проверка 1: проверяется возможность загрузки страницы http://www.microsoft.com/ru-ru/ или картинки https://www.google.de/logos/google.jpg или скрипта (jsonp):
+страница загружается через ajax (т.е. в фоновом режиме "GET https://www.google.de/logos/google.jpg" , эту страничку/картинку не надо показывать, важен только результат, загрузилась или нет.
+Если файервол блокирует эту страницу/картинку методом "DROP" то по достижении таймаута в таблице результатов должен показываться результат "таймаут" (и по возможности сколько секунд).
+Если файервол блокирует эту страницу/картинку методом "TCP Reset" или "icmp reject" то в таблице результатов должно отобразиться "connection reset".
+Если загрузка была успешная то мы получаем такой результат (HTTP status code, HTTP headers, payload):
+
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=UTF-8
+Content-Length: 4000
+
+<html><head>......
+
+или для картинки:
+HTTP/1.1 200 OK
+Content-Type: image/jpeg
+Content-Length: 12345
+
+..JFIF..... (бинарные данные)....
+
+Пример заблокироанного файла/картинки:
+
+HTTP/1.1 403 Access Denied
+Content-Length: 4012
+Content-Type: text/html
+
+<html><head><title>access denied</title></head><body><p>Access Denied!</p>.......
+
+
+результат (все вместе с HTTP-Headers) кодируется Base64 и отсылается (опять же через AJAX) на сервер test.example.com для проверки.
+
+
+
+
+Проверка 2: проверяется возможность загрузки исполняемого файла:
+файл загружается асинхронно по AJAX с test.example.com ("GET http://test.example.com/test.exe").
+Если файервол блокирует эту загрузку методом "DROP" то по достижении таймаута в таблице результатов должен показываться результат "таймаут" (и по возможности сколько секунд).
+Если файервол блокирует эту загрузку методом "TCP Reset" или "icmp reject" то в таблице результатов должно отобразиться "connection reset".
+Если загрузка была успешная то мы получаем такой результат (HTTP status code, HTTP headers, payload):
+
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=UTF-8
+Content-Length: 4000
+
+<html><head>......
+
+Пример успешной загрузки exe файла:
+
+HTTP/1.1 200 OK
+Content-Length: 294816
+Content-Type: application/octet-stream
+
+MZ?sdkfjsd...... (300KB бинарных данных)
+
+Пример заблокироанного файла/картинки:
+
+HTTP/1.1 403 Access Denied
+Content-Length: 4012
+Content-Type: text/html
+
+<html><head><title>access denied</title></head><body><p>Access Denied!</p>.......
+
+
+результат (все вместе с HTTP-Headers) кодируется Base64 и отсылается (опять же через AJAX) на сервер test.example.com для проверки.
+
+Сервер проверяет является ли этот результат правильным (т.е. оригинальная страница (HTTP status code 200) или блок-страница (HTTP Status code 403)) и возращает результат проверки в виде text или json браузеру. Браузер показывает результат (ОК или "blocked by proxy") в браузере.
+
+Вышеописанная проверка успешной загрузки осужествляется на сервере и не входит в задачу т.к. это не сложно. Если вы хотите написать и серверный код то это может выглядеть примерно так:
+броузер загружает по ajax payload на сервер. Сервер конвернирует обратно из Base64 и осужествляет проверки payload:
+-размер
+-хеш
+-magic bytes с помощью libmagic (возращается результат команды "file payload.exe")
+-проверка payload с помощью regex (например содержит ли html payload строку "access denied")
+-дополнительно извлекаются значения HTTP headers: status code (200 OK, 403 Access Denied, 401 Auth required) etc.
+
+На этом этапе исходим из того что сервер получает payload и возращает в виде текста или json один из след вариантов:
+1. status="OK/sucess", size=123456, http_status_code="200 OK", filetype=application/executable, sha256=abc123...
+2. status="access denied/blocked by proxy", size=4000, filetype=text/html, http_status_code="403 URL Blocked", sha256=cba321...
+значение из поля "status" показывается в таблице результатов ( http://imgur.com/a/8Vks8 )
+
+Важно: необходима проверка загрузки файлов с 3party доменов (обход same origin policy). 
+Важно: пользователь не должен видеть самих загружаемых файлов, в таблице должны стоять только результаты (OK, access denied, blocked by proxy, timeout, reset)
+Важно: сервер test.example.com должен получить payload вместе с response HTTP Headers и HTTP status code(2xx,3xx,4xx,5xx)
+Важно: детект и "перехват" ошибок: connection rejected, timeout, HTTP status "access denied" code 403, HTTP status "authentication required" 401, итд. - пользователь не должен видеть ошибок броузера которые могут быть вызваны отдельными тестами (напомню планируется в будущем до ста тестов).
+
+
+
+Примеры сообщений браузера если страница/загрузка заблокирована (вместо этих сообщении/ошибок в таблице результатов должны стоять "timeout", "connecton was reset", "access denied":
+The connection has timed out (drop by the firewall): http://3.bp.blogspot.com/-kUwgQrURsRo/U2LPzRAibHI/AAAAAAAAAIQ/dRf_D8qSPxk/s1600/error.png
+The connecton was reset (reset by the firewall): http://sulkunte.net/wordpress/wp-content/uploads/2012/03/screenshot-error.png
+Access denied by proxy: http://regmedia.co.uk/2009/03/20/websense_cisco.jpg
+
+
+Примеры подобных тестовых страниц:
+virustotal.com - образец нескольких проверок, результаты появляются по мере завершения проверки, асинхронно а не последовательно.
+https://joincheck.gotowebinar.com/ - ajax проверка интернет соединения итд
+https://performancemanager4.successfactors.com/diagnostic/main - тесты внизу страницы
+https://www.ssllabs.com/ssltest/viewMyClient.html
+https://www.ssllabs.com/ssltest/analyze.html?d=yandex.ru
